@@ -1,5 +1,6 @@
 # Core AI / ML
 anthropic>=0.40.0
+openai>=1.50.0
 openai-whisper>=20231117
 
 # Media processing (ffmpeg must be installed separately via system package manager)

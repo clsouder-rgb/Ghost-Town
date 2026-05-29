@@ -1,22 +1,15 @@
 import json
 import logging
+import re
 from pathlib import Path
 
-import anthropic
-
-from .config import ANTHROPIC_API_KEY, CLAUDE_MODEL, VIABILITY_CATEGORIES
+from .config import (
+    ANTHROPIC_API_KEY, CLAUDE_MODEL,
+    OPENAI_API_KEY, OPENAI_MODEL,
+    AI_PROVIDER, VIABILITY_CATEGORIES,
+)
 
 logger = logging.getLogger(__name__)
-
-_client: anthropic.Anthropic | None = None
-
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    return _client
-
 
 _CLASSIFY_PROMPT = """\
 You are a media content analyst. Analyze the provided content extracted from a media file and return a structured JSON assessment.
@@ -57,75 +50,114 @@ def classify_content(
     image_entities: str = "",
     file_type: str = "video",
 ) -> dict:
-    """Classify media content and return viability scoring via Claude."""
-    file_path = Path(file_path)
+    if AI_PROVIDER == "openai":
+        return _classify_openai(file_path, transcript, image_text, image_description, image_entities, file_type)
+    return _classify_claude(file_path, transcript, image_text, image_description, image_entities, file_type)
 
-    content_parts = []
-    content_parts.append(f"File: {file_path.name}")
-    content_parts.append(f"Type: {file_type}")
 
+# ── shared helpers ────────────────────────────────────────────────────────────
+
+def _build_prompt(file_path: Path, transcript, image_text, image_description, image_entities, file_type) -> str | None:
+    parts = [f"File: {Path(file_path).name}", f"Type: {file_type}"]
     if transcript:
-        content_parts.append(f"\n### Video Transcript\n{transcript}")
+        parts.append(f"\n### Video Transcript\n{transcript}")
     if image_text:
-        content_parts.append(f"\n### Extracted Image Text\n{image_text}")
+        parts.append(f"\n### Extracted Image Text\n{image_text}")
     if image_description:
-        content_parts.append(f"\n### Image Description\n{image_description}")
+        parts.append(f"\n### Image Description\n{image_description}")
     if image_entities:
-        content_parts.append(f"\n### Identified Entities\n{image_entities}")
+        parts.append(f"\n### Identified Entities\n{image_entities}")
 
     if not any([transcript, image_text, image_description]):
-        return _empty_result("No extractable content found")
+        return None
 
-    content_block = "\n".join(content_parts)
-    prompt = _CLASSIFY_PROMPT.format(
-        content_block=content_block,
+    return _CLASSIFY_PROMPT.format(
+        content_block="\n".join(parts),
         categories=", ".join(VIABILITY_CATEGORIES),
     )
 
-    client = _get_client()
-    logger.info(f"Classifying content for {file_path.name}")
 
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    raw = response.content[0].text if response.content else "{}"
+def _parse_response(raw: str) -> dict:
     try:
         result = json.loads(raw.strip())
         result["error"] = None
         return result
     except json.JSONDecodeError:
-        logger.warning(f"Failed to parse JSON response, attempting extraction")
-        return _extract_json_fallback(raw)
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if match:
+            try:
+                result = json.loads(match.group())
+                result["error"] = None
+                return result
+            except json.JSONDecodeError:
+                pass
+    return _empty_result("Failed to parse classification response")
 
 
 def _empty_result(reason: str) -> dict:
     return {
-        "title": "Untitled",
-        "summary": reason,
-        "category": "Other",
-        "secondary_categories": [],
-        "key_topics": [],
-        "sentiment": "neutral",
-        "target_audience": "Unknown",
-        "viability_score": 0,
-        "viability_reasoning": reason,
-        "content_flags": [],
-        "recommended_tags": [],
-        "error": reason,
+        "title": "Untitled", "summary": reason, "category": "Other",
+        "secondary_categories": [], "key_topics": [], "sentiment": "neutral",
+        "target_audience": "Unknown", "viability_score": 0,
+        "viability_reasoning": reason, "content_flags": [],
+        "recommended_tags": [], "error": reason,
     }
 
 
-def _extract_json_fallback(text: str) -> dict:
-    import re
-    match = re.search(r'\{.*\}', text, re.DOTALL)
-    if match:
-        try:
-            result = json.loads(match.group())
-            result["error"] = None
-            return result
-        except json.JSONDecodeError:
-            pass
-    return _empty_result("Failed to parse classification response")
+# ── Claude ────────────────────────────────────────────────────────────────────
+
+_anthropic_client = None
+
+
+def _get_anthropic():
+    global _anthropic_client
+    if _anthropic_client is None:
+        import anthropic
+        _anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    return _anthropic_client
+
+
+def _classify_claude(file_path, transcript, image_text, image_description, image_entities, file_type) -> dict:
+    prompt = _build_prompt(file_path, transcript, image_text, image_description, image_entities, file_type)
+    if not prompt:
+        return _empty_result("No extractable content found")
+
+    logger.info(f"[Claude] Classifying {Path(file_path).name}")
+    client = _get_anthropic()
+    response = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = response.content[0].text if response.content else "{}"
+    return _parse_response(raw)
+
+
+# ── OpenAI ────────────────────────────────────────────────────────────────────
+
+_openai_client = None
+
+
+def _get_openai():
+    global _openai_client
+    if _openai_client is None:
+        from openai import OpenAI
+        _openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    return _openai_client
+
+
+def _classify_openai(file_path, transcript, image_text, image_description, image_entities, file_type) -> dict:
+    prompt = _build_prompt(file_path, transcript, image_text, image_description, image_entities, file_type)
+    if not prompt:
+        return _empty_result("No extractable content found")
+
+    logger.info(f"[OpenAI] Classifying {Path(file_path).name}")
+    client = _get_openai()
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+    )
+    raw = response.choices[0].message.content if response.choices else "{}"
+    return _parse_response(raw)

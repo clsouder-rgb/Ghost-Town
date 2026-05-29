@@ -15,6 +15,12 @@ TOKEN_PATH = BASE_DIR / "token.json"
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+
+# Set AI_PROVIDER=openai to use OpenAI instead of Claude
+AI_PROVIDER = os.getenv("AI_PROVIDER", "claude").lower()
+
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 
 GDRIVE_FOLDER_NAME = os.getenv("GDRIVE_FOLDER_NAME", "ReelCapture")
