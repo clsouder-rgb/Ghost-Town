@@ -18,3 +18,8 @@ google-auth-oauthlib>=1.2.0
 
 # Env / config
 python-dotenv>=1.0.1
+
+# API server
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12

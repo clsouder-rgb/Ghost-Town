@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd plist for Ornery-Kiwi on macOS.
+  Install with: ./install_launchd.sh
+  Or manually:  cp com.ornery-kiwi.agent.plist ~/Library/LaunchAgents/
+                launchctl load ~/Library/LaunchAgents/com.ornery-kiwi.agent.plist
+
+  PYTHON_BIN and PROJECT_DIR are substituted by install_launchd.sh.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.ornery-kiwi.agent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>PYTHON_BIN</string>
+        <string>PROJECT_DIR/serve.py</string>
+        <string>--host</string>
+        <string>127.0.0.1</string>
+        <string>--port</string>
+        <string>8000</string>
+        <string>--log-level</string>
+        <string>info</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>PROJECT_DIR</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>HOME_DIR</string>
+        <!--
+          ANTHROPIC_API_KEY must be set here or in PROJECT_DIR/.env
+          Uncomment and fill in if you prefer launchd to own the secret:
+        -->
+        <!-- <key>ANTHROPIC_API_KEY</key>
+             <string>sk-ant-...</string> -->
+    </dict>
+
+    <!-- Start automatically at login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart automatically if it crashes -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Throttle restarts to avoid tight crash loops -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>HOME_DIR/Library/Logs/ornery-kiwi.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>HOME_DIR/Library/Logs/ornery-kiwi.err</string>
+</dict>
+</plist>
