@@ -20,6 +20,24 @@ from .drive_sync import sync_report_pair
 logger = logging.getLogger(__name__)
 
 
+def _evidence_ingest(file_path, file_type, classification, transcript="",
+                     image_text="", image_description="", md_path=None):
+    """Best-effort Evidence Library ingest — never blocks the main pipeline."""
+    try:
+        from evidence_library.ingest import ingest_pipeline_result
+        ingest_pipeline_result(
+            source_file=file_path,
+            file_type=file_type,
+            classification=classification,
+            transcript=transcript,
+            image_text=image_text,
+            image_description=image_description,
+            md_path=md_path,
+        )
+    except Exception as exc:
+        logger.warning(f"Evidence Library ingest skipped: {exc}")
+
+
 def process_file(file_path: Path, drive_sync: bool = True) -> dict:
     """
     Full pipeline for one media file.
@@ -97,6 +115,8 @@ def _process_video(file_path: Path, processed_at: datetime, drive_sync: bool) ->
     if drive_sync:
         drive_urls = sync_report_pair(md_path, docx_path, subfolder=file_path.stem)
 
+    _evidence_ingest(file_path, "video", classification, transcript=transcript, md_path=md_path)
+
     return {
         "md_path": str(md_path),
         "docx_path": str(docx_path),
@@ -145,6 +165,13 @@ def _process_image(file_path: Path, processed_at: datetime, drive_sync: bool) ->
     drive_urls = {}
     if drive_sync:
         drive_urls = sync_report_pair(md_path, docx_path, subfolder=file_path.stem)
+
+    _evidence_ingest(
+        file_path, "image", classification,
+        image_text=vision_data.get("text", ""),
+        image_description=vision_data.get("description", ""),
+        md_path=md_path,
+    )
 
     return {
         "md_path": str(md_path),
