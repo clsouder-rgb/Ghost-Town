@@ -34,6 +34,7 @@ def _connect() -> sqlite3.Connection:
 
 
 def _create_tables(conn: sqlite3.Connection):
+    # Create table and base indexes (columns that have always existed)
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS evidence (
             id                TEXT PRIMARY KEY,
@@ -52,8 +53,7 @@ def _create_tables(conn: sqlite3.Connection):
             human_review_flag INTEGER NOT NULL DEFAULT 0,
             tags              TEXT NOT NULL DEFAULT '[]',
             raw_content       TEXT,
-            viability_score   INTEGER,
-            content_hash      TEXT
+            viability_score   INTEGER
         );
 
         CREATE INDEX IF NOT EXISTS idx_evidence_source_type
@@ -64,14 +64,16 @@ def _create_tables(conn: sqlite3.Connection):
             ON evidence(confidence_flag);
         CREATE INDEX IF NOT EXISTS idx_evidence_human_review
             ON evidence(human_review_flag);
-        CREATE INDEX IF NOT EXISTS idx_evidence_content_hash
-            ON evidence(content_hash);
     """)
-    # Migrate existing databases that predate content_hash column
+    # Migrate: add content_hash column if this is an existing database
     try:
         conn.execute("ALTER TABLE evidence ADD COLUMN content_hash TEXT")
     except sqlite3.OperationalError:
         pass  # Column already exists
+    # Index must be created after the column exists
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_evidence_content_hash ON evidence(content_hash)"
+    )
     conn.commit()
 
 
