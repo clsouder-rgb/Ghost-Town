@@ -30,6 +30,8 @@ import logging
 import sys
 from pathlib import Path
 
+from evidence_library.extractors import SUPPORTED_EXTENSIONS as SUPPORTED
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(message)s",
@@ -37,16 +39,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SUPPORTED = {".pdf", ".docx", ".xlsx", ".pptx", ".csv", ".html", ".htm", ".rtf", ".txt", ".md", ".text"}
+
+def _is_supported(p: Path) -> bool:
+    name = p.name.lower()
+    return name.endswith(".tar.gz") or p.suffix.lower() in SUPPORTED
 
 
 def collect_files(target: Path) -> list[Path]:
     if target.is_file():
-        return [target] if target.suffix.lower() in SUPPORTED else []
-    return sorted(
-        p for p in target.rglob("*")
-        if p.is_file() and p.suffix.lower() in SUPPORTED
-    )
+        return [target] if _is_supported(target) else []
+    return sorted(p for p in target.rglob("*") if p.is_file() and _is_supported(p))
 
 
 def run(args):

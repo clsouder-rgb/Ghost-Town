@@ -5,8 +5,11 @@ openai-whisper>=20231117
 
 # Document extraction (Evidence Library)
 pypdf>=4.0.0
-openpyxl>=3.1.0
-python-pptx>=1.0.0
+openpyxl>=3.1.0          # .xlsx
+python-pptx>=1.0.0        # .pptx
+xlrd>=2.0.1               # .xls (legacy Excel)
+pyreadstat>=1.2.0         # .xpt .sas7bdat .sav .dta (clinical trial data)
+# numbers-parser>=4.5.0  # Apple Numbers (optional, uncomment if needed)
 
 # Media processing (ffmpeg must be installed separately via system package manager)
 Pillow>=10.4.0
