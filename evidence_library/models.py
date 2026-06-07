@@ -48,6 +48,7 @@ class EvidenceRecord(BaseModel):
     tags: list[str] = Field(default_factory=list)
     raw_content: Optional[str] = None
     viability_score: Optional[int] = None
+    content_hash: Optional[str] = None
 
 
 # ── API request / response ────────────────────────────────────────────────────

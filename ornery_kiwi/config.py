@@ -35,6 +35,14 @@ AI_PROVIDER = os.getenv("AI_PROVIDER", "claude").lower()
 
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 
+# Evidence Library governance
+# Minimum viability score (0-10) for pipeline results to be auto-ingested.
+# Raise this to reduce noise. Set to 0 to ingest everything.
+EVIDENCE_MIN_SCORE = int(os.getenv("EVIDENCE_MIN_SCORE", "4"))
+# Title similarity threshold (0.0-1.0). Records with title similarity above
+# this value are treated as duplicates and skipped.
+EVIDENCE_TITLE_SIMILARITY = float(os.getenv("EVIDENCE_TITLE_SIMILARITY", "0.85"))
+
 GDRIVE_FOLDER_NAME = os.getenv("GDRIVE_FOLDER_NAME", "ReelCapture")
 GDRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 

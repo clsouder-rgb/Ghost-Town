@@ -52,7 +52,8 @@ def _create_tables(conn: sqlite3.Connection):
             human_review_flag INTEGER NOT NULL DEFAULT 0,
             tags              TEXT NOT NULL DEFAULT '[]',
             raw_content       TEXT,
-            viability_score   INTEGER
+            viability_score   INTEGER,
+            content_hash      TEXT
         );
 
         CREATE INDEX IF NOT EXISTS idx_evidence_source_type
@@ -63,7 +64,14 @@ def _create_tables(conn: sqlite3.Connection):
             ON evidence(confidence_flag);
         CREATE INDEX IF NOT EXISTS idx_evidence_human_review
             ON evidence(human_review_flag);
+        CREATE INDEX IF NOT EXISTS idx_evidence_content_hash
+            ON evidence(content_hash);
     """)
+    # Migrate existing databases that predate content_hash column
+    try:
+        conn.execute("ALTER TABLE evidence ADD COLUMN content_hash TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     conn.commit()
 
 
@@ -77,12 +85,12 @@ def insert(record: EvidenceRecord):
             (id, title, source_type, source_path, date_added, date_published,
              population_topic, summary, key_findings, limitations, citation,
              confidence_flag, recency_flag, human_review_flag, tags,
-             raw_content, viability_score)
+             raw_content, viability_score, content_hash)
         VALUES
             (:id, :title, :source_type, :source_path, :date_added, :date_published,
              :population_topic, :summary, :key_findings, :limitations, :citation,
              :confidence_flag, :recency_flag, :human_review_flag, :tags,
-             :raw_content, :viability_score)
+             :raw_content, :viability_score, :content_hash)
         """,
         {
             **record.model_dump(),
@@ -102,25 +110,45 @@ def get_by_source_path(source_path: str) -> Optional[EvidenceRecord]:
     return _row_to_record(row) if row else None
 
 
+def get_by_content_hash(content_hash: str) -> Optional[EvidenceRecord]:
+    """Look up an existing record by content hash. Catches exact duplicates regardless of filename."""
+    conn = _connect()
+    row = conn.execute(
+        "SELECT * FROM evidence WHERE content_hash = ? LIMIT 1", (content_hash,)
+    ).fetchone()
+    return _row_to_record(row) if row else None
+
+
+def get_all_titles() -> list[tuple[str, str]]:
+    """Return (id, title) for all records — used for title-similarity dedup check."""
+    conn = _connect()
+    rows = conn.execute("SELECT id, title FROM evidence").fetchall()
+    return [(r["id"], r["title"]) for r in rows]
+
+
 def upsert(record: EvidenceRecord):
     """
-    Insert or update by source_path.
+    Insert or update, checking three dedup layers in order:
+      1. source_path  — same file re-dropped (updates in place)
+      2. content_hash — identical content under a different filename (updates in place)
+      3. Otherwise    — insert as new record
 
-    - If source_path is set and a record with that path already exists:
-        preserve the original id and date_added, update all other fields.
-    - Otherwise: insert as a new record.
-
-    This prevents duplicate catalog entries when the same source file
-    is re-processed (e.g. dropped into the watch folder twice).
+    In all cases the original id and date_added are preserved so history is stable.
     """
+    existing = None
+
     if record.source_path:
         existing = get_by_source_path(record.source_path)
-        if existing:
-            # Preserve original identity and first-seen date
-            record = record.model_copy(update={
-                "id": existing.id,
-                "date_added": existing.date_added,
-            })
+
+    if existing is None and record.content_hash:
+        existing = get_by_content_hash(record.content_hash)
+
+    if existing:
+        record = record.model_copy(update={
+            "id": existing.id,
+            "date_added": existing.date_added,
+        })
+
     insert(record)
 
 

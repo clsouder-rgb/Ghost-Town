@@ -2,7 +2,7 @@ import logging
 import time
 from pathlib import Path
 from queue import Queue, Empty
-from threading import Thread
+from threading import Thread, Lock
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileMovedEvent
@@ -21,7 +21,30 @@ except Exception:
     DOC_SUPPORTED = {".pdf", ".docx", ".txt", ".md", ".text"}
 
 ALL_SUPPORTED = MEDIA_SUPPORTED | DOC_SUPPORTED
-SETTLE_SECONDS = 2.0  # wait for file to finish writing before processing
+SETTLE_SECONDS = 2.0
+
+# Dedup window: ignore re-queuing the same path within this many seconds.
+# Prevents double-processing when iOS/macOS fires both on_created and on_moved
+# for the same file, or when a file is processed then a late event re-fires.
+_DEDUP_TTL = 60.0
+_recent_lock = Lock()
+_recent_seen: dict[str, float] = {}  # path → timestamp
+
+
+def _dedup_enqueue(queue: Queue, path: Path):
+    """Enqueue path only if it wasn't seen within _DEDUP_TTL seconds."""
+    key = str(path)
+    now = time.monotonic()
+    with _recent_lock:
+        # Expire old entries
+        expired = [k for k, t in _recent_seen.items() if now - t > _DEDUP_TTL]
+        for k in expired:
+            del _recent_seen[k]
+        if key in _recent_seen:
+            logger.debug(f"Dedup: skipping recently-seen {path.name}")
+            return
+        _recent_seen[key] = now
+    queue.put(path)
 
 
 class _MediaHandler(FileSystemEventHandler):
@@ -42,7 +65,7 @@ class _MediaHandler(FileSystemEventHandler):
         if suffix in ALL_SUPPORTED:
             kind = "doc" if suffix in DOC_SUPPORTED else "media"
             logger.info(f"Detected {kind}: {p.name}")
-            self._queue.put(p)
+            _dedup_enqueue(self._queue, p)
 
 
 def _ingest_document(file_path: Path):
@@ -184,4 +207,4 @@ class OrneryKiwiWatcher:
         for p in sorted(self.watch_dir.iterdir()):
             if p.suffix.lower() in ALL_SUPPORTED and p.is_file():
                 logger.info(f"Queuing existing file: {p.name}")
-                self._queue.put(p)
+                _dedup_enqueue(self._queue, p)
