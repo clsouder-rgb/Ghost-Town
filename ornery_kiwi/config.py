@@ -5,7 +5,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path.home() / "Documents" / "ReelCapture"
-WATCH_DIR = BASE_DIR / "watch"
+
+# Override WATCH_DIR to point at any folder — e.g. your Desktop drop folder
+_watch_env = os.getenv("WATCH_DIR")
+WATCH_DIR = Path(_watch_env).expanduser() if _watch_env else BASE_DIR / "watch"
+
 OUTPUT_DIR = BASE_DIR / "output"
 PROCESSED_DIR = BASE_DIR / "processed"
 
