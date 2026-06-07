@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_DIR = Path.home() / "Documents" / "ReelCapture"
+_base_env = os.getenv("BASE_DIR")
+BASE_DIR = Path(_base_env).expanduser() if _base_env else Path.home() / "Documents" / "ReelCapture"
 
 # Override WATCH_DIR to point at any folder — e.g. your Desktop drop folder
 _watch_env = os.getenv("WATCH_DIR")
