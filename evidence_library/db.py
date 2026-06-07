@@ -93,6 +93,37 @@ def insert(record: EvidenceRecord):
     conn.commit()
 
 
+def get_by_source_path(source_path: str) -> Optional[EvidenceRecord]:
+    """Look up an existing record by source_path. Used for duplicate prevention."""
+    conn = _connect()
+    row = conn.execute(
+        "SELECT * FROM evidence WHERE source_path = ? LIMIT 1", (source_path,)
+    ).fetchone()
+    return _row_to_record(row) if row else None
+
+
+def upsert(record: EvidenceRecord):
+    """
+    Insert or update by source_path.
+
+    - If source_path is set and a record with that path already exists:
+        preserve the original id and date_added, update all other fields.
+    - Otherwise: insert as a new record.
+
+    This prevents duplicate catalog entries when the same source file
+    is re-processed (e.g. dropped into the watch folder twice).
+    """
+    if record.source_path:
+        existing = get_by_source_path(record.source_path)
+        if existing:
+            # Preserve original identity and first-seen date
+            record = record.model_copy(update={
+                "id": existing.id,
+                "date_added": existing.date_added,
+            })
+    insert(record)
+
+
 def get_by_id(evidence_id: str) -> Optional[EvidenceRecord]:
     conn = _connect()
     row = conn.execute(

@@ -27,7 +27,7 @@ def ingest_from_request(req: IngestRequest) -> EvidenceRecord:
         date_added=_now_iso(),
         **req.model_dump(),
     )
-    db.insert(record)
+    db.upsert(record)  # deduplicates by source_path if provided
     logger.info(f"[EvidenceLibrary] Ingested: {record.title} ({record.id})")
     return record
 
@@ -91,7 +91,7 @@ def ingest_pipeline_result(
         viability_score=score,
     )
 
-    db.insert(record)
+    db.upsert(record)  # deduplicates by source_path — same file re-processed updates in place
     logger.info(f"[EvidenceLibrary] Auto-ingested from pipeline: {record.title} (score={score})")
     return record
 
@@ -125,7 +125,7 @@ def ingest_text_document(
         tags=tags or [],
         raw_content=content,
     )
-    db.insert(record)
+    db.upsert(record)  # deduplicates by source_path if provided
     logger.info(f"[EvidenceLibrary] Ingested text doc: {title}")
     return record
 

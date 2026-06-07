@@ -23,6 +23,13 @@ logger = logging.getLogger(__name__)
 def _evidence_ingest(file_path, file_type, classification, transcript="",
                      image_text="", image_description="", md_path=None):
     """Best-effort Evidence Library ingest — never blocks the main pipeline."""
+    import os
+    if os.getenv("EVIDENCE_INGEST_DISABLED"):
+        logger.info(
+            f"[EvidenceLibrary] Auto-ingest disabled (EVIDENCE_INGEST_DISABLED=1). "
+            f"Skipping {Path(file_path).name}. Pipeline continues normally."
+        )
+        return
     try:
         from evidence_library.ingest import ingest_pipeline_result
         ingest_pipeline_result(
