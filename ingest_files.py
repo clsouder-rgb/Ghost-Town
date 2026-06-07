@@ -37,7 +37,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SUPPORTED = {".pdf", ".docx", ".txt", ".md", ".text"}
+SUPPORTED = {".pdf", ".docx", ".xlsx", ".pptx", ".csv", ".html", ".htm", ".rtf", ".txt", ".md", ".text"}
 
 
 def collect_files(target: Path) -> list[Path]:
