@@ -4,7 +4,7 @@ Extracts drug names, conditions, study types, mechanisms without API calls.
 """
 
 import re
-from typing import set
+from typing import Optional
 
 # Common clinical terms — add to these as your library grows
 DRUG_NAMES = {
