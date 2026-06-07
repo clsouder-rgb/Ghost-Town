@@ -35,21 +35,39 @@ def extract_text(file_path: Path) -> tuple[str, Optional[str]]:
 
 
 def _extract_pdf(path: Path) -> tuple[str, Optional[str]]:
+    # Try pypdf first; fall back to pdftotext (poppler-utils) if pypdf fails.
+    # Catch BaseException: broken native extensions (e.g. _cffi_backend) raise
+    # RuntimeError/PanicException rather than standard ImportError.
     try:
         from pypdf import PdfReader
-    except ImportError:
-        return "", "pypdf not installed. Run: pip install pypdf"
-
-    try:
         reader = PdfReader(str(path))
-        pages = []
-        for i, page in enumerate(reader.pages):
-            text = page.extract_text() or ""
-            if text.strip():
-                pages.append(text)
-        if not pages:
+        pages = [page.extract_text() or "" for page in reader.pages]
+        text = "\n\n".join(p for p in pages if p.strip())
+        if text.strip():
+            return text, None
+        # pypdf returned empty — fall through to pdftotext
+    except BaseException:
+        pass
+
+    return _extract_pdf_pdftotext(path)
+
+
+def _extract_pdf_pdftotext(path: Path) -> tuple[str, Optional[str]]:
+    import shutil, subprocess
+    if not shutil.which("pdftotext"):
+        return "", (
+            "PDF extraction failed: pypdf error and pdftotext not found. "
+            "Install poppler-utils (brew install poppler / apt install poppler-utils)."
+        )
+    try:
+        result = subprocess.run(
+            ["pdftotext", str(path), "-"],
+            capture_output=True, text=True, timeout=60,
+        )
+        text = result.stdout
+        if not text.strip():
             return "", "PDF contained no extractable text (may be scanned image)"
-        return "\n\n".join(pages), None
+        return text, None
     except Exception as exc:
         return "", f"PDF extraction failed: {exc}"
 
