@@ -3,6 +3,9 @@ anthropic>=0.40.0
 openai>=1.50.0
 openai-whisper>=20231117
 
+# Document extraction (Evidence Library)
+pypdf>=4.0.0
+
 # Media processing (ffmpeg must be installed separately via system package manager)
 Pillow>=10.4.0
 

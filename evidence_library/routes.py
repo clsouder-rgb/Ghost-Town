@@ -1,12 +1,15 @@
 """FastAPI routes for the Evidence Library — mounted at /evidence on the main app."""
 
 import logging
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
+import tempfile
 
 from . import db
-from .ingest import ingest_from_request
+from .ingest import ingest_from_request, ingest_text_document
+from .extractors import extract_text, infer_metadata, SUPPORTED_EXTENSIONS
 from .models import (
     IngestRequest, IngestResponse,
     EvidencePacket, SearchResponse,
@@ -40,6 +43,67 @@ def ingest(body: IngestRequest):
     """
     record = ingest_from_request(body)
     return IngestResponse(id=record.id, title=record.title, message="Ingested successfully")
+
+
+@router.post("/upload", response_model=IngestResponse, status_code=201)
+async def upload_file(
+    file: UploadFile = File(...),
+    source_type: str = Form("other"),
+    tags: str = Form(""),
+    population_topic: str = Form(""),
+    citation: str = Form(""),
+    confidence_flag: str = Form("unknown"),
+):
+    """
+    Upload a file (PDF, DOCX, TXT, MD) directly into the Evidence Library.
+    Text is extracted automatically. Metadata can be supplied via form fields.
+
+    WRITE OPERATION — localhost-only, no authentication. See security notice above.
+
+    Example (curl):
+        curl -X POST http://127.0.0.1:8000/evidence/upload \\
+          -F "file=@/path/to/study.pdf" \\
+          -F "source_type=clinical_trial" \\
+          -F "tags=GLP-1,cardiovascular,RCT"
+    """
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file type '{suffix}'. Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}",
+        )
+
+    # Write upload to a temp file so extractors can read it normally
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(await file.read())
+        tmp_path = Path(tmp.name)
+
+    try:
+        text, err = extract_text(tmp_path)
+        if err:
+            raise HTTPException(status_code=422, detail=f"Extraction error: {err}")
+
+        meta = infer_metadata(text, file.filename)
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+
+        record = ingest_text_document(
+            title=meta["title"],
+            content=text,
+            source_type=source_type,
+            source_path=file.filename,
+            tags=tag_list,
+            citation=citation or file.filename,
+            population_topic=population_topic or meta.get("population_topic"),
+            confidence_flag=confidence_flag,
+        )
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    return IngestResponse(
+        id=record.id,
+        title=record.title,
+        message=f"Extracted {len(text):,} chars from {file.filename}",
+    )
 
 
 # ── Search ────────────────────────────────────────────────────────────────────
