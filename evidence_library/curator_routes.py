@@ -3,9 +3,10 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from . import db
 from .models import CatalogEntry
+from ornery_kiwi.api.auth import check_write_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/curator", tags=["curator"])
@@ -74,8 +75,9 @@ def mark_reviewed(
     evidence_id: str,
     human_review_flag: bool = Query(True),
     confidence_flag: Optional[str] = Query(None),
+    _: None = Depends(check_write_token),
 ):
-    """Mark a record as reviewed and optionally update confidence."""
+    """Mark a record as reviewed and optionally update confidence. Requires API token."""
     from .models import ReviewPatch
 
     patch = ReviewPatch(
@@ -100,8 +102,8 @@ def mark_reviewed(
 
 
 @router.post("/tag/{evidence_id}")
-def add_tags(evidence_id: str, tags: list[str] = Query(...)):
-    """Add tags to a record."""
+def add_tags(evidence_id: str, tags: list[str] = Query(...), _: None = Depends(check_write_token)):
+    """Add tags to a record. Requires API token."""
     record = db.get_by_id(evidence_id)
     if not record:
         raise HTTPException(status_code=404, detail=f"Evidence '{evidence_id}' not found")

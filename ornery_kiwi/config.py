@@ -11,6 +11,13 @@ BASE_DIR = Path(_base_env).expanduser() if _base_env else Path.home() / "Documen
 _watch_env = os.getenv("WATCH_DIR")
 WATCH_DIR = Path(_watch_env).expanduser() if _watch_env else BASE_DIR / "watch"
 
+# API server binding — 127.0.0.1 for localhost-only, 0.0.0.0 for network access
+API_HOST = os.getenv("API_HOST", "127.0.0.1")
+API_PORT = int(os.getenv("API_PORT", "8000"))
+
+# API authentication — optional token for write endpoints
+API_TOKEN = os.getenv("API_TOKEN", "")
+
 OUTPUT_DIR = BASE_DIR / "output"
 PROCESSED_DIR = BASE_DIR / "processed"
 

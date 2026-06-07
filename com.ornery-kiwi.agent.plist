@@ -8,6 +8,11 @@
                 launchctl load ~/Library/LaunchAgents/com.ornery-kiwi.agent.plist
 
   PYTHON_BIN and PROJECT_DIR are substituted by install_launchd.sh.
+
+  For network access from other machines:
+    - Set API_HOST=0.0.0.0 and API_TOKEN=your-token in .env
+    - Or change --host 127.0.0.1 to --host 0.0.0.0 below
+  Default (127.0.0.1) is localhost-only, no token needed.
 -->
 <plist version="1.0">
 <dict>

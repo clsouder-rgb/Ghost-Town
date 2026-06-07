@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form, Depends
 import tempfile
 
 from . import db
@@ -16,30 +16,33 @@ from .models import (
     CatalogEntry, ReviewPatch,
 )
 from .packet import to_packet, format_multi_packet_context
+from ornery_kiwi.api.auth import check_write_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/evidence", tags=["evidence"])
 
 
-# ── Write endpoints — localhost-only protection notice ────────────────────────
+# ── Write endpoints — authentication ──────────────────────────────────────────
 #
 # SECURITY: /evidence/ingest, /evidence/{id} (DELETE), and /evidence/{id}/review
-# (PATCH) are write endpoints with NO authentication.
+# (PATCH) are write endpoints protected by optional API token.
 #
-# They are safe ONLY while the server binds to 127.0.0.1 (localhost).
-# Do NOT expose this service on 0.0.0.0 or any external network interface
-# without adding authentication first (e.g. API key header, Bearer token).
+# Token protection is ON when API_TOKEN env var is set (network mode).
+# Token protection is OFF when API_TOKEN is empty (localhost-only mode).
 #
-# Current binding is set in serve.py --host argument and the launchd plist
-# (127.0.0.1 only). Verify with: lsof -i :8000
+# Binding is controlled by API_HOST env var:
+#   API_HOST=127.0.0.1 (default) — localhost only, no token needed
+#   API_HOST=0.0.0.0 — network accessible, API_TOKEN required for writes
+#
+# For network access, set in .env: API_TOKEN=your-secret-token-here
 #
 # ── Ingest ────────────────────────────────────────────────────────────────────
 
 @router.post("/ingest", response_model=IngestResponse, status_code=201)
-def ingest(body: IngestRequest):
+def ingest(body: IngestRequest, _: None = Depends(check_write_token)):
     """
     Manually ingest an evidence document (article, guideline, PDF metadata, etc.).
-    WRITE OPERATION — localhost-only, no authentication. See security notice above.
+    WRITE OPERATION — requires API token if server is exposed to network.
     """
     record = ingest_from_request(body)
     return IngestResponse(id=record.id, title=record.title, message="Ingested successfully")
@@ -53,12 +56,13 @@ async def upload_file(
     population_topic: str = Form(""),
     citation: str = Form(""),
     confidence_flag: str = Form("unknown"),
+    _: None = Depends(check_write_token),
 ):
     """
     Upload a file (PDF, DOCX, TXT, MD) directly into the Evidence Library.
     Text is extracted automatically. Metadata can be supplied via form fields.
 
-    WRITE OPERATION — localhost-only, no authentication. See security notice above.
+    WRITE OPERATION — requires API token if server is exposed to network.
 
     Example (curl):
         curl -X POST http://127.0.0.1:8000/evidence/upload \\
@@ -160,20 +164,20 @@ def get_packet(evidence_id: str):
 
 
 @router.delete("/{evidence_id}", status_code=204)
-def delete_evidence(evidence_id: str):
+def delete_evidence(evidence_id: str, _: None = Depends(check_write_token)):
     """
     Remove an evidence record.
-    WRITE OPERATION — localhost-only, no authentication. See security notice above.
+    WRITE OPERATION — requires API token if server is exposed to network.
     """
     if not db.delete_by_id(evidence_id):
         raise HTTPException(status_code=404, detail=f"Evidence '{evidence_id}' not found")
 
 
 @router.patch("/{evidence_id}/review", response_model=EvidencePacket)
-def patch_review(evidence_id: str, body: ReviewPatch):
+def patch_review(evidence_id: str, body: ReviewPatch, _: None = Depends(check_write_token)):
     """
     Mark an item as human-reviewed and optionally update confidence/recency/limitations.
-    WRITE OPERATION — localhost-only, no authentication. See security notice above.
+    WRITE OPERATION — requires API token if server is exposed to network.
     """
     updated = db.patch_review(
         evidence_id,

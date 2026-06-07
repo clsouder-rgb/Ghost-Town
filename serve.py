@@ -13,7 +13,7 @@ import threading
 
 import uvicorn
 
-from ornery_kiwi.config import WATCH_DIR, BASE_DIR, OUTPUT_DIR, PROCESSED_DIR
+from ornery_kiwi.config import WATCH_DIR, BASE_DIR, OUTPUT_DIR, PROCESSED_DIR, API_HOST, API_PORT
 
 
 def _ensure_dirs():
@@ -37,8 +37,8 @@ def _start_watcher(drive_sync: bool):
 
 def main():
     parser = argparse.ArgumentParser(prog="serve", description="Ornery-Kiwi server")
-    parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--host", default=API_HOST, help=f"API host (default: {API_HOST})")
+    parser.add_argument("--port", type=int, default=API_PORT, help=f"API port (default: {API_PORT})")
     parser.add_argument("--no-drive", action="store_true", help="Skip Google Drive sync")
     parser.add_argument("--no-watch", action="store_true", help="Disable folder watcher")
     parser.add_argument("--reload", action="store_true", help="Hot-reload (dev only)")
