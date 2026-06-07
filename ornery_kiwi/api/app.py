@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routes.health import router as health_router
 from .routes.ingest import router as ingest_router
 from evidence_library.routes import router as evidence_router
+from evidence_library.curator_routes import router as curator_router
 from evidence_library import db as evidence_db
 from ornery_kiwi.config import BASE_DIR
 
@@ -28,3 +29,4 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(ingest_router)
 app.include_router(evidence_router)
+app.include_router(curator_router)

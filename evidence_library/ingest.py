@@ -8,6 +8,7 @@ from typing import Optional
 
 from . import db
 from .models import EvidenceRecord, IngestRequest, SourceType, ConfidenceFlag, RecencyFlag
+from .auto_tagger import extract_auto_tags, extract_citations
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,12 @@ def ingest_text_document(
 ) -> EvidenceRecord:
     """Ingest a plain text document (PDF text dump, article, guideline, etc.)."""
     summary = content[:500].strip() + ("..." if len(content) > 500 else "")
+
+    # Auto-extract tags from content and merge with user-provided tags
+    auto_tags = extract_auto_tags(content, filename=str(source_path or title))
+    user_tags = tags or []
+    merged_tags = sorted(list(set(user_tags) | set(auto_tags)))
+
     record = EvidenceRecord(
         id=_new_id(),
         title=title,
@@ -122,11 +129,11 @@ def ingest_text_document(
         confidence_flag=confidence_flag,
         recency_flag=RecencyFlag.UNKNOWN,
         human_review_flag=True,   # manual ingests need human review
-        tags=tags or [],
+        tags=merged_tags,
         raw_content=content,
     )
     db.upsert(record)  # deduplicates by source_path if provided
-    logger.info(f"[EvidenceLibrary] Ingested text doc: {title}")
+    logger.info(f"[EvidenceLibrary] Ingested text doc: {title} with {len(merged_tags)} tags")
     return record
 
 
