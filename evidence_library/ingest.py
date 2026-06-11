@@ -125,10 +125,13 @@ def ingest_pipeline_result(
 
     # ── Build record ───────────────────────────────────────────────────────────
     confidence = _score_to_confidence(score)
-    tags = list(classification.get("recommended_tags", []))
+    # Merge Claude's tags with keyword auto-tagger for richer Obsidian connections
+    claude_tags = list(classification.get("recommended_tags", []))
     category = classification.get("category", "")
-    if category and category not in tags:
-        tags.append(category)
+    if category and category not in claude_tags:
+        claude_tags.append(category)
+    auto_tags = extract_auto_tags(raw_content, filename=source_file.name) if raw_content else []
+    tags = sorted(list(set(claude_tags) | set(auto_tags)))
     topics = classification.get("key_topics", [])
     source_path = str(md_path) if md_path else str(source_file)
 
@@ -154,6 +157,7 @@ def ingest_pipeline_result(
 
     db.upsert(record)
     logger.info(f"[EvidenceLibrary] Auto-ingested: {record.title} (score={score})")
+    _auto_export_to_obsidian(record)
     return record
 
 
@@ -206,10 +210,26 @@ def ingest_text_document(
     )
     db.upsert(record)
     logger.info(f"[EvidenceLibrary] Ingested text doc: {title} with {len(merged_tags)} tags")
+    _auto_export_to_obsidian(record)
     return record
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
+def _auto_export_to_obsidian(record: EvidenceRecord):
+    """Write the record to the Obsidian vault if OBSIDIAN_VAULT is configured."""
+    try:
+        from ornery_kiwi.config import OBSIDIAN_VAULT
+    except ImportError:
+        return
+    if not OBSIDIAN_VAULT:
+        return
+    try:
+        from .obsidian_export import export_single_record
+        export_single_record(record, OBSIDIAN_VAULT)
+    except Exception as exc:
+        logger.warning(f"[Obsidian] Auto-export failed for '{record.title[:40]}': {exc}")
+
 
 def _score_to_confidence(score: int) -> str:
     if score >= 7:

@@ -43,6 +43,11 @@ EVIDENCE_MIN_SCORE = int(os.getenv("EVIDENCE_MIN_SCORE", "4"))
 # this value are treated as duplicates and skipped.
 EVIDENCE_TITLE_SIMILARITY = float(os.getenv("EVIDENCE_TITLE_SIMILARITY", "0.85"))
 
+# Obsidian auto-export: set to your vault path to auto-write MD files on ingest.
+# Example: OBSIDIAN_VAULT=~/Library/Mobile Documents/iCloud~md~obsidian/Documents/clinical focus
+_obsidian_env = os.getenv("OBSIDIAN_VAULT", "")
+OBSIDIAN_VAULT = Path(_obsidian_env).expanduser() if _obsidian_env else None
+
 GDRIVE_FOLDER_NAME = os.getenv("GDRIVE_FOLDER_NAME", "ReelCapture")
 GDRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
